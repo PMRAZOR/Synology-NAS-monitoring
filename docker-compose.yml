@@ -1,15 +1,70 @@
-version: '3'
+version: '3.8'
+
 services:
-  grafana:
-    build: ./docker/
-    container_name: grafana
-    environment:
-      TZ: Europe/London
+  influxdb:
+    image: influxdb:2.7
+    container_name: synology-influxdb
     restart: unless-stopped
-    volumes:
-      - ./grafana:/var/lib/grafana
-      - ./grafana/influxdb:/var/lib/influxdb
     ports:
-      - 3003:3003
-      - 8086:8086
-      - 5144:514/udp
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=12341234aaa
+      - DOCKER_INFLUXDB_INIT_ORG=home
+      - DOCKER_INFLUXDB_INIT_BUCKET=monitoring
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=synologymonitor
+      # ============================
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  telegraf:
+    image: telegraf:1.16.3
+    container_name: synology-telegraf
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    ports:
+      - "8125:8125/udp"  # StatsD
+      - "514:514/udp"    # Syslog
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./mibs:/usr/share/snmp/mibs:ro
+      - /proc:/host/proc:ro
+    environment:
+      - HOST_PROC=/host/proc
+      - SNMP_MIBS=+ALL
+    networks:
+      - monitoring
+    privileged: true
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: synology-grafana
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  influxdb-data:
+  influxdb-config:
+  grafana-data:
