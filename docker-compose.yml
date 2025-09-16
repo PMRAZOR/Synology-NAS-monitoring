@@ -35,7 +35,7 @@ services:
         condition: service_healthy
     ports:
       - "8125:8125/udp"  # StatsD
-      - "514:514/udp"    # Syslog
+      - "8094:514/udp"    # Syslog
     volumes:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
       - ./mibs:/usr/share/snmp/mibs:ro
